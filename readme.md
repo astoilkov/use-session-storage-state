@@ -3,38 +3,31 @@
 > React hook that persist data in `sessionStorage`
 
 [![Downloads](https://img.shields.io/npm/dm/use-session-storage-state)](https://www.npmjs.com/package/use-session-storage-state)
-[![Gzipped Size](https://img.shields.io/bundlephobia/minzip/use-session-storage-state)](https://bundlephobia.com/result?p=use-session-storage-state)
+[![Gzipped Size](https://badgen.net/bundlephobia/minzip/use-session-storage-state)](https://bundlephobia.com/result?p=use-session-storage-state)
 [![Test Coverage](https://img.shields.io/codeclimate/coverage/astoilkov/use-session-storage-state)](https://codeclimate.com/github/astoilkov/use-session-storage-state/test_coverage)
-[![Build Status](https://img.shields.io/github/workflow/status/astoilkov/use-session-storage-state/CI)](https://github.com/astoilkov/use-session-storage-state/actions/workflows/main.yml)
+[![Build Status](https://www.travis-ci.com/astoilkov/use-session-storage-state.svg?branch=main)](https://travis-ci.org/astoilkov/use-session-storage-state)
 
 ## Install
 
-React 18 and above:
-```bash
-npm install use-session-storage-state
-```
-
-⚠️ React 17 and below. For docs, go to the [react-17 branch](https://github.com/astoilkov/use-session-storage-state/tree/react-17).
-```bash
-npm install use-session-storage-state@17
+```shell
+npm install use-session-storage-state@1
 ```
 
 ## Why
 
 - Actively maintained for the past 2 years — see [contributions](https://github.com/astoilkov/use-session-storage-state/graphs/contributors) page.
-- React 18 concurrent rendering support.
-- SSR support.
-- Handles the `Window` [`storage`](https://developer.mozilla.org/en-US/docs/Web/API/Window/storage_event) event and updates changes across browser tabs, windows, and iframe's. Disable with `storageSync: false`.
+- SSR support with handling of [hydration mismatches](https://github.com/astoilkov/use-session-storage-state/issues/23).
+- Handles the `Window` [`storage`](https://developer.mozilla.org/en-US/docs/Web/API/Window/storage_event) event and updates changes across browser tabs, windows, and iframe's.
 - In-memory fallback when `sessionStorage` throws an error and can't store the data. Provides a `isPersistent` API to let you notify the user their data isn't currently being stored.
 - Aiming for high-quality with [my open-source principles](https://astoilkov.com/my-open-source-principles).
 
 ## Usage
 
 ```typescript
-import useSessionStorageState from 'use-session-storage-state'
+import useLocalStorageState from 'use-session-storage-state'
 
 export default function Todos() {
-    const [todos, setTodos] = useSessionStorageState('todos', {
+    const [todos, setTodos] = useLocalStorageState('todos', {
         ssr: true,
         defaultValue: ['buy avocado', 'do 50 push-ups']
     })
@@ -49,10 +42,10 @@ You can experiment with the example [here](https://codesandbox.io/s/todos-exampl
 
 ```tsx
 import React, { useState } from 'react'
-import useSessionStorageState from 'use-session-storage-state'
+import useLocalStorageState from 'use-session-storage-state'
 
 export default function Todos() {
-    const [todos, setTodos] = useSessionStorageState('todos', {
+    const [todos, setTodos] = useLocalStorageState('todos', {
         ssr: true,
         defaultValue: ['buy avocado']
     })
@@ -79,6 +72,25 @@ export default function Todos() {
 </details>
 
 <details>
+<summary>SSR support</summary>
+<p></p>
+
+SSR supports includes handling of hydration mismatches. This prevents the following error:  `Warning: Expected server HTML to contain a matching ...`. This is the only library I'm aware of that handles this case. For more, see [discussion here](https://github.com/astoilkov/use-session-storage-state/issues/23).
+
+```tsx
+import useLocalStorageState from 'use-session-storage-state'
+
+export default function Todos() {
+    const [todos, setTodos] = useLocalStorageState('todos', {
+        ssr: true,
+        defaultValue: ['buy avocado', 'do 50 push-ups']
+    })
+}
+```
+
+</details>
+
+<details>
 <summary id="is-persistent">Notify the user when <code>sessionStorage</code> isn't saving the data using the <code>`isPersistent`</code> property</summary>
 <p></p>
 
@@ -86,7 +98,7 @@ There are a few cases when `sessionStorage` [isn't available](https://github.com
 
 ```tsx
 import React, { useState } from 'react'
-import useSessionStorageState from 'use-session-storage-state'
+import useLocalStorageState from 'use-session-storage-state'
 
 export default function Todos() {
     const [todos, setTodos, { isPersistent }] = useSessionStorageState('todos', {
@@ -129,7 +141,7 @@ export default function Todos() {
 
 ## API
 
-### `useSessionStorageState(key: string, options?: SessionStorageOptions)`
+### `useSessionStorageState(key, options?)`
 
 Returns `[value, setValue, { removeItem, isPersistent }]` when called. The first two values are the same as `useState()`. The third value contains two extra properties:
 - `removeItem()` — calls `sessionStorage.removeItem(key)` and resets the hook to it's default state
@@ -151,6 +163,14 @@ Default: `undefined`
 
 The default value. You can think of it as the same as `useState(defaultValue)`.
 
+### `options.ssr`
+
+Type: `boolean`
+
+Default: `false`
+
+Enables SSR support and handles hydration mismatches. Not enabling this can cause the following error: `Warning: Expected server HTML to contain a matching ...`. This is the only library I'm aware of that handles this case. For more, see [discussion here](https://github.com/astoilkov/use-session-storage-state/issues/23).
+
 ### `options.storageSync`
 
 Type: `boolean`
@@ -158,11 +178,3 @@ Type: `boolean`
 Default: `true`
 
 Setting to `false` doesn't subscribe to the [Window storage event](https://developer.mozilla.org/en-US/docs/Web/API/Window/storage_event). If you set to `false`, updates won't be synchronized across tabs, windows and iframes.
-
-### `options.serializer`
-
-Type: `{ stringify, parse }`
-
-Default: `JSON`
-
-JSON does not serialize `Date`, `Regex`, or `BigInt` data.  You can pass in [superjson](https://github.com/blitz-js/superjson) or other `JSON`-compatible serialization library for more advanced serialization.

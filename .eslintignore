@@ -1,2 +1,3 @@
-/test
+/dist
 *.d.ts
+test.tsx

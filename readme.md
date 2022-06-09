@@ -178,3 +178,7 @@ Type: `boolean`
 Default: `true`
 
 Setting to `false` doesn't subscribe to the [Window storage event](https://developer.mozilla.org/en-US/docs/Web/API/Window/storage_event). If you set to `false`, updates won't be synchronized across tabs, windows and iframes.
+
+## Related
+
+- [`use-local-storage-state`](https://github.com/astoilkov/use-local-storage-state) — A clone of this library but for `localStorage`.

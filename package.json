@@ -1,6 +1,6 @@
 {
     "name": "use-session-storage-state",
-    "version": "17.1.0",
+    "version": "17.2.0",
     "description": "React hook that persist data in sessionStorage",
     "license": "MIT",
     "repository": "astoilkov/use-session-storage-state",

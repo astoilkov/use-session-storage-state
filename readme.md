@@ -10,7 +10,7 @@
 ## Install
 
 ```shell
-npm install use-session-storage-state@1
+npm install use-session-storage-state@17
 ```
 
 ## Why

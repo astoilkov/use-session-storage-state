@@ -45,7 +45,7 @@ export default function Todos() {
 <summary>Todo list example + CodeSandbox link</summary>
 <p></p>
 
-You can experiment with the example [here](https://codesandbox.io/s/todos-example-use-session-storage-state-pewbql?file=/src/App.tsx).
+You can experiment with the example [here](https://codesandbox.io/s/todos-example-use-session-storage-state-3s4hhe).
 
 ```tsx
 import React, { useState } from 'react'
@@ -53,7 +53,6 @@ import useSessionStorageState from 'use-session-storage-state'
 
 export default function Todos() {
     const [todos, setTodos] = useSessionStorageState('todos', {
-        ssr: true,
         defaultValue: ['buy avocado']
     })
     const [query, setQuery] = useState('')

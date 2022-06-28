@@ -35,7 +35,6 @@ import useSessionStorageState from 'use-session-storage-state'
 
 export default function Todos() {
     const [todos, setTodos] = useSessionStorageState('todos', {
-        ssr: true,
         defaultValue: ['buy avocado', 'do 50 push-ups']
     })
 }

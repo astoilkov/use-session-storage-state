@@ -1,11 +1,11 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { useRef, useMemo, useEffect, useCallback, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 
 // in memory fallback used then `sessionStorage` throws an error
 export const inMemoryData = new Map<string, unknown>()
 
 export type SessionStorageOptions<T> = {
-    defaultValue?: T
+    defaultValue?: T | (() => T)
     storageSync?: boolean
     serializer?: {
         stringify: (value: unknown) => string
@@ -40,12 +40,12 @@ export default function useSessionStorageState<T = undefined>(
     key: string,
     options?: SessionStorageOptions<T | undefined>,
 ): SessionStorageState<T | undefined> {
-    const defaultValue = options?.defaultValue
+    const [defaultValue] = useState(options?.defaultValue)
 
     // SSR support
     // - on the server, return a constant value
-    // - this makes the implementation simpler and smaller the `sessionStorage` object is `undefined`
-    //   on the server
+    // - this makes the implementation simpler and smaller because the `sessionStorage` object is
+    //   `undefined` on the server
     if (typeof window === 'undefined') {
         return [
             defaultValue,
@@ -77,8 +77,6 @@ function useBrowserSessionStorageState<T>(
     parse: (value: string) => unknown = parseJSON,
     stringify: (value: unknown) => string = JSON.stringify,
 ): SessionStorageState<T | undefined> {
-    const initialDefaultValue = useRef(defaultValue).current
-
     // store default value in sessionStorage:
     // - initial issue: https://github.com/astoilkov/use-local-storage-state/issues/26
     //   issues that were caused by incorrect initial and secondary implementations:
@@ -86,8 +84,8 @@ function useBrowserSessionStorageState<T>(
     //   - https://github.com/astoilkov/use-local-storage-state/issues/33
     if (
         !inMemoryData.has(key) &&
-        initialDefaultValue !== undefined &&
-        sessionStorage.getItem(key) === null
+        defaultValue !== undefined &&
+        goodTry(() => sessionStorage.getItem(key)) === null
     ) {
         // reasons for `sessionStorage` to throw an error:
         // - maximum quota is exceeded
@@ -95,15 +93,13 @@ function useBrowserSessionStorageState<T>(
         //   `sessionStorage.setItem()` will throw
         // - trying to access sessionStorage object when cookies are disabled in Safari throws
         //   "SecurityError: The operation is insecure."
-        try {
-            sessionStorage.setItem(key, stringify(initialDefaultValue))
-        } catch {}
+        goodTry(() => sessionStorage.setItem(key, stringify(defaultValue)))
     }
 
     // we keep the `parsed` value in a ref because `useSyncExternalStore` requires a cached version
     const storageValue = useRef<{ item: string | null; parsed: T | undefined }>({
         item: null,
-        parsed: initialDefaultValue,
+        parsed: defaultValue,
     })
     const value = useSyncExternalStore(
         useCallback(
@@ -123,7 +119,7 @@ function useBrowserSessionStorageState<T>(
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
         () => {
-            const item = sessionStorage.getItem(key)
+            const item = goodTry(() => sessionStorage.getItem(key)) ?? null
 
             if (inMemoryData.has(key)) {
                 storageValue.current = {
@@ -134,9 +130,9 @@ function useBrowserSessionStorageState<T>(
                 let parsed: T | undefined
 
                 try {
-                    parsed = item === null ? initialDefaultValue : (parse(item) as T)
+                    parsed = item === null ? defaultValue : (parse(item) as T)
                 } catch {
-                    parsed = initialDefaultValue
+                    parsed = defaultValue
                 }
 
                 storageValue.current = {
@@ -149,7 +145,7 @@ function useBrowserSessionStorageState<T>(
         },
 
         // istanbul ignore next
-        () => initialDefaultValue,
+        () => defaultValue,
     )
     const setState = useCallback(
         (newValue: SetStateAction<T | undefined>): void => {
@@ -160,7 +156,7 @@ function useBrowserSessionStorageState<T>(
             // - maximum quota is exceeded
             // - under Mobile Safari (since iOS 5) when the user enters private mode
             //   `sessionStorage.setItem()` will throw
-            // - trying to access sessionStorage object when cookies are disabled in Safari throws
+            // - trying to access `sessionStorage` object when cookies are disabled in Safari throws
             //   "SecurityError: The operation is insecure."
             try {
                 sessionStorage.setItem(key, stringify(value))
@@ -184,7 +180,7 @@ function useBrowserSessionStorageState<T>(
         }
 
         const onStorage = (e: StorageEvent): void => {
-            if (e.storageArea === sessionStorage && e.key === key) {
+            if (e.storageArea === goodTry(() => sessionStorage) && e.key === key) {
                 triggerCallbacks(key)
             }
         }
@@ -199,16 +195,17 @@ function useBrowserSessionStorageState<T>(
             value,
             setState,
             {
-                isPersistent: value === initialDefaultValue || !inMemoryData.has(key),
+                isPersistent: value === defaultValue || !inMemoryData.has(key),
                 removeItem(): void {
+                    goodTry(() => sessionStorage.removeItem(key))
+
                     inMemoryData.delete(key)
-                    sessionStorage.removeItem(key)
 
                     triggerCallbacks(key)
                 },
             },
         ],
-        [key, setState, value, initialDefaultValue],
+        [key, setState, value, defaultValue],
     )
 }
 
@@ -224,4 +221,12 @@ function triggerCallbacks(key: string): void {
 // `JSON.parse(JSON.stringify(undefined))` returns the string "undefined" not the value `undefined`
 function parseJSON(value: string): unknown {
     return value === 'undefined' ? undefined : JSON.parse(value)
+}
+
+function goodTry<T>(tryFn: () => T): T | undefined {
+    try {
+        return tryFn()
+    } catch {
+        return undefined
+    }
 }

@@ -4,7 +4,6 @@
 
 [![Downloads](https://img.shields.io/npm/dm/use-session-storage-state)](https://www.npmjs.com/package/use-session-storage-state)
 [![Gzipped Size](https://img.shields.io/bundlephobia/minzip/use-session-storage-state)](https://bundlephobia.com/result?p=use-session-storage-state)
-[![Test Coverage](https://img.shields.io/codeclimate/coverage/astoilkov/use-session-storage-state)](https://codeclimate.com/github/astoilkov/use-session-storage-state/test_coverage)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/astoilkov/use-session-storage-state/main.yml?branch=main)](https://github.com/astoilkov/use-session-storage-state/actions/workflows/main.yml)
 
 ## Install

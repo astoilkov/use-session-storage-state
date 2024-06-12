@@ -21,9 +21,9 @@ npm install use-session-storage-state@17
 
 ## Why
 
-- Clone of [`use-local-storage-state`](https://github.com/astoilkov/use-local-storage-state) that I've been [maintaining for the past 2 years](https://github.com/astoilkov/use-local-storage-state/graphs/contributors).
-- React 18 concurrent rendering support.
+- Clone of [`use-local-storage-state`](https://github.com/astoilkov/use-local-storage-state) that I've been [actively maintaining for the past 4 years](https://github.com/astoilkov/use-local-storage-state/graphs/contributors).
 - SSR support.
+- Works with concurrent rendering and React 19.
 - Handles the `Window` [`storage`](https://developer.mozilla.org/en-US/docs/Web/API/Window/storage_event) event and updates changes across iframe's. Disable with `storageSync: false`.
 - In-memory fallback when `sessionStorage` throws an error and can't store the data. Provides a `isPersistent` API to let you notify the user their data isn't currently being stored.
 - Aiming for high-quality with [my open-source principles](https://astoilkov.com/my-open-source-principles).

@@ -57,7 +57,7 @@
         "@typescript-eslint/parser": "^5.27.1",
         "confusing-browser-globals": "^1.0.11",
         "eslint": "^8.17.0",
-        "eslint-config-strictest": "^0.4.0",
+        "eslint-config-strictest": "^0.8.1",
         "eslint-formatter-pretty": "^4.0.0",
         "eslint-plugin-promise": "^6.0.0",
         "eslint-plugin-react": "^7.29.4",

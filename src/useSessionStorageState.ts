@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 
-// in memory fallback used then `sessionStorage` throws an error
+// in memory fallback used when `sessionStorage` throws an error
 export const inMemoryData = new Map<string, unknown>()
 
 export type SessionStorageOptions<T> = {
@@ -26,7 +26,7 @@ export type SessionStorageState<T> = [
 
 export default function useSessionStorageState(
     key: string,
-    options?: Omit<SessionStorageOptions<unknown>, 'defaultValue'>,
+    options?: SessionStorageOptions<undefined>,
 ): SessionStorageState<unknown>
 export default function useSessionStorageState<T>(
     key: string,
@@ -40,27 +40,8 @@ export default function useSessionStorageState<T = undefined>(
     key: string,
     options?: SessionStorageOptions<T | undefined>,
 ): SessionStorageState<T | undefined> {
-    const [defaultValue] = useState(options?.defaultValue)
-
-    // SSR support
-    // - on the server, return a constant value
-    // - this makes the implementation simpler and smaller because the `sessionStorage` object is
-    //   `undefined` on the server
-    if (typeof window === 'undefined') {
-        return [
-            defaultValue,
-            (): void => {},
-            {
-                isPersistent: true,
-                removeItem: (): void => {},
-            },
-        ]
-    }
-
     const serializer = options?.serializer
-    // disabling ESLint because the above if statement can be executed only on the server. the value
-    // of `window` can't change between calls.
-    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const [defaultValue] = useState(options?.defaultValue)
     return useBrowserSessionStorageState(
         key,
         defaultValue,
@@ -77,35 +58,18 @@ function useBrowserSessionStorageState<T>(
     parse: (value: string) => unknown = parseJSON,
     stringify: (value: unknown) => string = JSON.stringify,
 ): SessionStorageState<T | undefined> {
-    // store default value in sessionStorage:
-    // - initial issue: https://github.com/astoilkov/use-local-storage-state/issues/26
-    //   issues that were caused by incorrect initial and secondary implementations:
-    //   - https://github.com/astoilkov/use-local-storage-state/issues/30
-    //   - https://github.com/astoilkov/use-local-storage-state/issues/33
-    if (
-        !inMemoryData.has(key) &&
-        defaultValue !== undefined &&
-        goodTry(() => sessionStorage.getItem(key)) === null
-    ) {
-        // reasons for `sessionStorage` to throw an error:
-        // - maximum quota is exceeded
-        // - under Mobile Safari (since iOS 5) when the user enters private mode
-        //   `sessionStorage.setItem()` will throw
-        // - trying to access sessionStorage object when cookies are disabled in Safari throws
-        //   "SecurityError: The operation is insecure."
-        goodTry(() => sessionStorage.setItem(key, stringify(defaultValue)))
-    }
-
     // we keep the `parsed` value in a ref because `useSyncExternalStore` requires a cached version
-    const storageValue = useRef<{ item: string | null; parsed: T | undefined }>({
-        item: null,
-        parsed: defaultValue,
+    const storageItem = useRef<{ string: string | null; parsed: T | undefined }>({
+        string: null,
+        parsed: undefined,
     })
+
     const value = useSyncExternalStore(
+        // useSyncExternalStore.subscribe
         useCallback(
             (onStoreChange) => {
-                const onChange = (localKey: string): void => {
-                    if (key === localKey) {
+                const onChange = (sessionKey: string): void => {
+                    if (key === sessionKey) {
                         onStoreChange()
                     }
                 }
@@ -117,40 +81,56 @@ function useBrowserSessionStorageState<T>(
             [key],
         ),
 
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // useSyncExternalStore.getSnapshot
         () => {
-            const item = goodTry(() => sessionStorage.getItem(key)) ?? null
+            const string = goodTry(() => sessionStorage.getItem(key)) ?? null
 
             if (inMemoryData.has(key)) {
-                storageValue.current = {
-                    item,
-                    parsed: inMemoryData.get(key) as T | undefined,
-                }
-            } else if (item !== storageValue.current.item) {
+                storageItem.current.parsed = inMemoryData.get(key) as T | undefined
+            } else if (string !== storageItem.current.string) {
                 let parsed: T | undefined
 
                 try {
-                    parsed = item === null ? defaultValue : (parse(item) as T)
+                    parsed = string === null ? defaultValue : (parse(string) as T)
                 } catch {
                     parsed = defaultValue
                 }
 
-                storageValue.current = {
-                    item,
-                    parsed,
-                }
+                storageItem.current.parsed = parsed
             }
 
-            return storageValue.current.parsed
+            storageItem.current.string = string
+
+            // store default value in sessionStorage:
+            // - initial issue: https://github.com/astoilkov/use-local-storage-state/issues/26
+            //   issues that were caused by incorrect initial and secondary implementations:
+            //   - https://github.com/astoilkov/use-local-storage-state/issues/30
+            //   - https://github.com/astoilkov/use-local-storage-state/issues/33
+            if (string === null && defaultValue !== undefined) {
+                // reasons for `sessionStorage` to throw an error:
+                // - maximum quota is exceeded
+                // - under Mobile Safari (since iOS 5) when the user enters private mode
+                //   `sessionStorage.setItem()` will throw
+                // - trying to access sessionStorage object when cookies are disabled in Safari throws
+                //   "SecurityError: The operation is insecure."
+                // eslint-disable-next-line no-console
+                goodTry(() => {
+                    const string = stringify(defaultValue)
+                    sessionStorage.setItem(key, string)
+                    storageItem.current = { string, parsed: defaultValue }
+                })
+            }
+
+            return storageItem.current.parsed
         },
 
-        // istanbul ignore next
+        // useSyncExternalStore.getServerSnapshot
         () => defaultValue,
     )
     const setState = useCallback(
         (newValue: SetStateAction<T | undefined>): void => {
             const value =
-                newValue instanceof Function ? newValue(storageValue.current.parsed) : newValue
+                newValue instanceof Function ? newValue(storageItem.current.parsed) : newValue
 
             // reasons for `sessionStorage` to throw an error:
             // - maximum quota is exceeded
@@ -226,7 +206,5 @@ function parseJSON(value: string): unknown {
 function goodTry<T>(tryFn: () => T): T | undefined {
     try {
         return tryFn()
-    } catch {
-        return undefined
-    }
+    } catch {}
 }

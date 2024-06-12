@@ -1,8 +1,13 @@
-import util from 'util'
+/**
+ * @vitest-environment jsdom
+ */
+
+import util from 'node:util'
 import superjson from 'superjson'
-import { render, renderHook, act } from '@testing-library/react'
+import { act, render, renderHook } from '@testing-library/react'
 import React, { useEffect, useLayoutEffect, useMemo } from 'react'
-import useSessionStorageState, { inMemoryData } from '../src/useSessionStorageState'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import useSessionStorageState, { inMemoryData } from '../src/useSessionStorageState.js'
 
 beforeEach(() => {
     // Throw an error when `console.error()` is called. This is especially useful in a React tests
@@ -19,31 +24,44 @@ beforeEach(() => {
     // - "Warning: Cannot update a component (`Component`) while rendering a different component
     //   (`Component`). To locate the bad setState() call inside `Component`, follow the stack trace
     //   as described in https://reactjs.org/link/setstate-in-render"
-    jest.spyOn(console, 'error').mockImplementation((format: string, ...args: any[]) => {
+    vi.spyOn(console, 'error').mockImplementation((format: string, ...args: any[]) => {
         throw new Error(util.format(format, ...args))
     })
 })
 
 afterEach(() => {
     inMemoryData.clear()
-    localStorage.clear()
-    sessionStorage.clear()
+    try {
+        localStorage.clear()
+        sessionStorage.clear()
+    } catch {}
 })
 
-describe('usesessionStorageState()', () => {
+describe('useSessionStorageState()', () => {
+    test('defaultValue accepts lazy initializer (like useState)', () => {
+        const { result } = renderHook(() =>
+            useSessionStorageState('todos', {
+                defaultValue: () => ['first', 'second'],
+            }),
+        )
+
+        const [todos] = result.current
+        expect(todos).toStrictEqual(['first', 'second'])
+    })
+
     test('initial state is written into the state', () => {
         const { result } = renderHook(() =>
             useSessionStorageState('todos', { defaultValue: ['first', 'second'] }),
         )
 
         const [todos] = result.current
-        expect(todos).toEqual(['first', 'second'])
+        expect(todos).toStrictEqual(['first', 'second'])
     })
 
-    test(`initial state isn't written into sessionStorage`, () => {
+    test(`initial state is written to sessionStorage`, () => {
         renderHook(() => useSessionStorageState('todos', { defaultValue: ['first', 'second'] }))
 
-        expect(sessionStorage.getItem('todos')).toEqual(JSON.stringify(['first', 'second']))
+        expect(sessionStorage.getItem('todos')).toStrictEqual(JSON.stringify(['first', 'second']))
     })
 
     test('updates state', () => {
@@ -58,8 +76,8 @@ describe('usesessionStorageState()', () => {
         })
 
         const [todos] = result.current
-        expect(todos).toEqual(['third', 'forth'])
-        expect(sessionStorage.getItem('todos')).toEqual(JSON.stringify(['third', 'forth']))
+        expect(todos).toStrictEqual(['third', 'forth'])
+        expect(sessionStorage.getItem('todos')).toStrictEqual(JSON.stringify(['third', 'forth']))
     })
 
     test('updates state with callback function', () => {
@@ -74,8 +92,8 @@ describe('usesessionStorageState()', () => {
         })
 
         const [todos] = result.current
-        expect(todos).toEqual(['first', 'second', 'third', 'forth'])
-        expect(sessionStorage.getItem('todos')).toEqual(
+        expect(todos).toStrictEqual(['first', 'second', 'third', 'forth'])
+        expect(sessionStorage.getItem('todos')).toStrictEqual(
             JSON.stringify(['first', 'second', 'third', 'forth']),
         )
     })
@@ -88,7 +106,7 @@ describe('usesessionStorageState()', () => {
         )
 
         const [todos] = result.current
-        expect(todos).toEqual(['first', 'second'])
+        expect(todos).toStrictEqual(['first', 'second'])
     })
 
     test('updating writes into sessionStorage', () => {
@@ -102,10 +120,10 @@ describe('usesessionStorageState()', () => {
             setTodos(['third', 'forth'])
         })
 
-        expect(sessionStorage.getItem('todos')).toEqual(JSON.stringify(['third', 'forth']))
+        expect(sessionStorage.getItem('todos')).toStrictEqual(JSON.stringify(['third', 'forth']))
     })
 
-    test('initially gets value from local storage if there is a value', () => {
+    test('initially gets value from session storage if there is a value', () => {
         sessionStorage.setItem('todos', JSON.stringify(['third', 'forth']))
 
         const { result } = renderHook(() =>
@@ -113,11 +131,31 @@ describe('usesessionStorageState()', () => {
         )
 
         const [todos] = result.current
-        expect(todos).toEqual(['third', 'forth'])
+        expect(todos).toStrictEqual(['third', 'forth'])
     })
 
     test('handles errors thrown by sessionStorage', () => {
-        jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+            throw new Error()
+        })
+
+        const { result } = renderHook(() =>
+            useSessionStorageState('set-item-will-throw', { defaultValue: '' }),
+        )
+
+        expect(() => {
+            act(() => {
+                const setValue = result.current[1]
+                setValue('will-throw')
+            })
+        }).not.toThrow()
+    })
+
+    // https://github.com/astoilkov/use-local-storage-state/issues/62
+    test('simulate blocking all the cookies in Safari', () => {
+        // in Safari, even just accessing `sessionStorage` throws "SecurityError: The operation is
+        // insecure."
+        vi.spyOn(window, 'sessionStorage', 'get').mockImplementation(() => {
             throw new Error()
         })
 
@@ -152,6 +190,16 @@ describe('usesessionStorageState()', () => {
         )
         const [value] = resultB.current
         expect(value).toBe(undefined)
+    })
+
+    test('`defaultValue` can be set to `null`', () => {
+        const { result } = renderHook(() =>
+            useSessionStorageState<string[] | null>('todos', {
+                defaultValue: null,
+            }),
+        )
+        const [value] = result.current
+        expect(value).toBe(null)
     })
 
     test('can set value to `null`', () => {
@@ -198,11 +246,11 @@ describe('usesessionStorageState()', () => {
             useSessionStorageState('todos', { defaultValue: ['first', 'second'] }),
         )
         const [value] = resultC.current
-        expect(value).toEqual(['first', 'second'])
+        expect(value).toStrictEqual(['first', 'second'])
     })
 
     test('returns the same update function when the value is saved', () => {
-        const functionMock = jest.fn()
+        const functionMock = vi.fn()
         const { rerender } = renderHook(() => {
             const [, setTodos] = useSessionStorageState('todos', {
                 defaultValue: ['first', 'second'],
@@ -212,10 +260,10 @@ describe('usesessionStorageState()', () => {
 
         rerender()
 
-        expect(functionMock.mock.calls.length).toEqual(1)
+        expect(functionMock.mock.calls.length).toStrictEqual(1)
     })
 
-    test('changing the "key" property updates the value from local storage', () => {
+    test('changing the "key" property updates the value from session storage', () => {
         sessionStorage.setItem('valueA', JSON.stringify('A'))
         sessionStorage.setItem('valueB', JSON.stringify('B'))
 
@@ -231,14 +279,14 @@ describe('usesessionStorageState()', () => {
         rerender({ key: 'valueB' })
 
         const [value] = result.current
-        expect(value).toEqual('B')
+        expect(value).toStrictEqual('B')
     })
 
     // https://github.com/astoilkov/use-local-storage-state/issues/30
     test(`when defaultValue isn't provided — don't write to sessionStorage on initial render`, () => {
         renderHook(() => useSessionStorageState('todos'))
 
-        expect(sessionStorage.getItem('todos')).toEqual(null)
+        expect(sessionStorage.getItem('todos')).toStrictEqual(null)
     })
 
     // https://github.com/astoilkov/use-local-storage-state/issues/33
@@ -247,7 +295,7 @@ describe('usesessionStorageState()', () => {
 
         renderHook(() => useSessionStorageState('todos', { defaultValue: 'blue' }))
 
-        expect(sessionStorage.getItem('color')).toEqual('red')
+        expect(sessionStorage.getItem('color')).toStrictEqual('red')
     })
 
     test('calling update from one hook updates the other', () => {
@@ -265,7 +313,7 @@ describe('usesessionStorageState()', () => {
         })
 
         const [todos] = resultB.current
-        expect(todos).toEqual(['third', 'forth'])
+        expect(todos).toStrictEqual(['third', 'forth'])
     })
 
     test('can reset value to default', () => {
@@ -286,14 +334,14 @@ describe('usesessionStorageState()', () => {
         })
 
         const [todos] = resultB.current
-        expect(todos).toEqual(['first', 'second'])
+        expect(todos).toStrictEqual(['first', 'second'])
     })
 
     // https://github.com/astoilkov/use-local-storage-state/issues/30
     test("when defaultValue isn't provided — don't write to sessionStorage on initial render", () => {
         renderHook(() => useSessionStorageState('todos'))
 
-        expect(sessionStorage.getItem('todos')).toEqual(null)
+        expect(sessionStorage.getItem('todos')).toStrictEqual(null)
     })
 
     test('basic setup with default value', () => {
@@ -304,7 +352,7 @@ describe('usesessionStorageState()', () => {
         )
 
         const [todos] = result.current
-        expect(todos).toEqual(['first', 'second'])
+        expect(todos).toStrictEqual(['first', 'second'])
     })
 
     test('if there are already items in sessionStorage', () => {
@@ -317,7 +365,7 @@ describe('usesessionStorageState()', () => {
         )
 
         const [todos] = result.current
-        expect(todos).toEqual([4, 5, 6])
+        expect(todos).toStrictEqual([4, 5, 6])
     })
 
     test('supports changing the key', () => {
@@ -331,8 +379,8 @@ describe('usesessionStorageState()', () => {
 
         rerender()
 
-        expect(JSON.parse(sessionStorage.getItem('todos1')!)).toEqual(['first', 'second'])
-        expect(JSON.parse(sessionStorage.getItem('todos2')!)).toEqual(['first', 'second'])
+        expect(JSON.parse(sessionStorage.getItem('todos1')!)).toStrictEqual(['first', 'second'])
+        expect(JSON.parse(sessionStorage.getItem('todos2')!)).toStrictEqual(['first', 'second'])
     })
 
     // https://github.com/astoilkov/use-local-storage-state/issues/39
@@ -426,6 +474,21 @@ describe('usesessionStorageState()', () => {
         expect(queryAllByText(/^1$/u)).toHaveLength(2)
     })
 
+    describe('hydration', () => {
+        test(`non-primitive defaultValue to return the same value by reference`, () => {
+            const defaultValue = ['first', 'second']
+            const hook = renderHook(
+                () =>
+                    useSessionStorageState('todos', {
+                        defaultValue,
+                    }),
+                { hydrate: true },
+            )
+            const [todos] = hook.result.current
+            expect(todos).toBe(defaultValue)
+        })
+    })
+
     describe('"storage" event', () => {
         const fireStorageEvent = (storageArea: Storage, key: string, newValue: unknown): void => {
             const oldValue = sessionStorage.getItem(key)
@@ -459,10 +522,10 @@ describe('usesessionStorageState()', () => {
             })
 
             const [todosA] = resultA.current
-            expect(todosA).toEqual(['third', 'forth'])
+            expect(todosA).toStrictEqual(['third', 'forth'])
 
             const [todosB] = resultB.current
-            expect(todosB).toEqual(['third', 'forth'])
+            expect(todosB).toStrictEqual(['third', 'forth'])
         })
 
         test('"storage" event updates state to default value', () => {
@@ -478,7 +541,7 @@ describe('usesessionStorageState()', () => {
             })
 
             const [todosB] = result.current
-            expect(todosB).toEqual(['first', 'second'])
+            expect(todosB).toStrictEqual(['first', 'second'])
         })
 
         test(`unrelated storage update doesn't do anything`, () => {
@@ -495,7 +558,7 @@ describe('usesessionStorageState()', () => {
             })
 
             const [todosA] = result.current
-            expect(todosA).toEqual(['first', 'second'])
+            expect(todosA).toStrictEqual(['first', 'second'])
         })
 
         test('`storageSync: false` disables "storage" event', () => {
@@ -511,13 +574,13 @@ describe('usesessionStorageState()', () => {
             })
 
             const [todosA] = result.current
-            expect(todosA).toEqual(['first', 'second'])
+            expect(todosA).toStrictEqual(['first', 'second'])
         })
     })
 
     describe('in memory fallback', () => {
         test('can retrieve data from in memory storage', () => {
-            jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+            vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
                 throw new Error()
             })
 
@@ -535,7 +598,7 @@ describe('usesessionStorageState()', () => {
             )
 
             const [value] = resultB.current
-            expect(value).toEqual(['first', 'second'])
+            expect(value).toStrictEqual(['first', 'second'])
         })
 
         test('isPersistent returns true by default', () => {
@@ -547,7 +610,7 @@ describe('usesessionStorageState()', () => {
         })
 
         test('isPersistent returns true when sessionStorage.setItem() throws an error but the value is the default value', () => {
-            jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+            vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
                 throw new Error()
             })
 
@@ -560,7 +623,7 @@ describe('usesessionStorageState()', () => {
         })
 
         test('isPersistent returns false when sessionStorage.setItem() throws an error', () => {
-            jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+            vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
                 throw new Error()
             })
 
@@ -575,7 +638,7 @@ describe('usesessionStorageState()', () => {
 
             const [todos, , { isPersistent }] = result.current
             expect(isPersistent).toBe(false)
-            expect(todos).toEqual(['third', 'forth'])
+            expect(todos).toStrictEqual(['third', 'forth'])
         })
 
         test('isPersistent becomes false when sessionStorage.setItem() throws an error on consecutive updates', () => {
@@ -583,7 +646,7 @@ describe('usesessionStorageState()', () => {
                 useSessionStorageState('todos', { defaultValue: ['first', 'second'] }),
             )
 
-            jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+            vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
                 throw new Error()
             })
 
@@ -593,7 +656,7 @@ describe('usesessionStorageState()', () => {
             })
 
             const [todos, , { isPersistent }] = result.current
-            expect(todos).toEqual(['second', 'third'])
+            expect(todos).toStrictEqual(['second', 'third'])
             expect(isPersistent).toBe(false)
         })
 
@@ -632,7 +695,7 @@ describe('usesessionStorageState()', () => {
             )
 
             const [value] = result.current
-            expect(value).toEqual([date])
+            expect(value).toStrictEqual([date])
         })
 
         test('can serialize Date (in array) from setValue', () => {
@@ -651,7 +714,7 @@ describe('usesessionStorageState()', () => {
             })
 
             const [value, _] = result.current
-            expect(value).toEqual([date])
+            expect(value).toStrictEqual([date])
         })
 
         test(`JSON as serializer can't handle undefined as value`, () => {
